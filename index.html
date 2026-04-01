@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Finance Pro | Cloud Dashboard</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --text: #1e293b;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg); margin: 0; display: flex; }
+
+        .sidebar { width: 260px; background: #1e293b; color: white; height: 100vh; position: fixed; padding: 30px 20px; box-sizing: border-box; }
+        .sidebar h2 { color: var(--primary); font-size: 1.2rem; margin-bottom: 40px; }
+        
+        .capital-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #334155; }
+        .main { margin-left: 260px; padding: 40px; width: calc(100% - 260px); }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: var(--card); padding: 20px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border-left: 4px solid var(--primary); }
+        .stat-card h4 { margin: 0; font-size: 0.8rem; color: #64748b; text-transform: uppercase; }
+        .stat-card p { margin: 10px 0 0; font-size: 1.4rem; font-weight: 700; }
+
+        .glass-panel { background: var(--card); padding: 30px; border-radius: 20px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); margin-bottom: 30px; }
+        .input-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; font-size: 0.85rem; margin-bottom: 5px; font-weight: 600; color: #475569; }
+        
+        input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; box-sizing: border-box; outline-color: var(--primary); }
+        .btn { padding: 12px 25px; border-radius: 10px; border: none; cursor: pointer; font-weight: 700; transition: 0.3s; }
+        .btn-prime { background: var(--primary); color: white; }
+        .btn-reset { background: #f1f5f9; color: #475569; }
+        .btn-danger { background: var(--danger); color: white; width: 100%; margin-top: 10px; font-size: 0.8rem; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        th { text-align: left; padding: 15px; background: #f8fafc; color: #64748b; font-size: 0.8rem; text-transform: uppercase; }
+        td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+        .status-up { color: var(--success); font-weight: bold; }
+        .status-down { color: var(--danger); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2><i class="fas fa-wallet"></i> ACCOUNT PRO</h2>
+        
+        <div class="capital-box">
+            <label style="color: #94a3b8;">Main Capital (Fixed)</label>
+            <p id="displayFixed" style="font-size: 1.2rem; font-weight: 700; margin: 5px 0;">₹0</p>
+            <input type="number" id="fixedInput" placeholder="Set Capital" style="padding: 8px; font-size: 0.8rem; background: #334155; border: none; color: white; width: 100%;">
+            <button onclick="saveFixed()" class="btn btn-prime" style="width: 100%; margin-top: 10px; padding: 8px; font-size: 0.8rem;">Update Capital</button>
+        </div>
+
+        <div class="capital-box" style="border-color: var(--success);">
+            <label style="color: #94a3b8;">Total Commission (Saved)</label>
+            <p id="displayComm" style="font-size: 1.2rem; font-weight: 700; margin: 5px 0; color: var(--success);">₹0</p>
+            <button onclick="resetComm()" class="btn btn-danger"><i class="fas fa-trash"></i> Reset Commission</button>
+        </div>
+
+        <p style="font-size: 0.7rem; color: #64748b; line-height: 1.5;">*Har din closing balance aur commission yahan update karein.</p>
+    </div>
+
+    <div class="main">
+        <div class="header-flex" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+            <div>
+                <h1 style="margin: 0; font-size: 1.8rem;">Daily Dashboard</h1>
+                <p id="currentDate" style="color: #64748b; margin: 5px 0;"></p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button onclick="resetToday()" class="btn btn-reset"><i class="fas fa-redo"></i> Reset Today</button>
+                <button onclick="saveToday()" class="btn btn-prime"><i class="fas fa-cloud-upload-alt"></i> Save Closing</button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card"><h4>Total Assets</h4><p id="liveTotal">₹0</p></div>
+            <div class="stat-card" style="border-left-color: #10b981;"><h4>Net P/L</h4><p id="liveDiff">₹0</p></div>
+            <div class="stat-card" style="border-left-color: #f59e0b;"><h4>Saved Comm.</h4><p id="liveCommHeader">₹0</p></div>
+            <div class="stat-card" style="border-left-color: #3b82f6;"><h4>Dues Active</h4><p id="liveDues">₹0</p></div>
+        </div>
+
+        <div class="glass-panel">
+            <h3 style="margin-top: 0; margin-bottom: 20px;"><i class="fas fa-edit"></i> Enter Today's Closing</h3>
+            <div class="input-row" id="inputContainer"></div>
+            
+            <hr style="margin: 25px 0; border: 0; border-top: 1px solid #eee;">
+            
+            <div style="max-width: 300px;">
+                <label style="color: var(--success);">Today's Commission Earned (+)</label>
+                <input type="number" id="todayCommInput" placeholder="Enter amount to add" style="border: 2px solid var(--success);">
+            </div>
+        </div>
+
+        <div class="glass-panel" style="padding: 0; overflow: hidden;">
+            <div style="padding: 20px; border-bottom: 1px solid #f1f5f9;">
+                <h3 style="margin: 0;"><i class="fas fa-history"></i> Closing History</h3>
+            </div>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead><tr id="tableHeader"></tr></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- FIREBASE CONFIG ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyDFzYIJg-E14bM46AdJHed85l9DhC_ThE",
+      authDomain: "cyber-service-tracker.firebaseapp.com",
+      databaseURL: "https://cyber-service-tracker-default-rtdb.firebaseio.com",
+      projectId: "cyber-service-tracker",
+      storageBucket: "cyber-service-tracker.firebasestorage.app",
+      messagingSenderId: "1008272385697",
+      appId: "1:1008272385697:web:b8ae5fb875ae120a10f2e0"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const accounts = ["Digipay", "Airtel", "HDFC", "DBGB", "CSC", "Cash", "Dues"];
+    let FIXED_CAP = 0;
+    let SAVED_COMM = 0;
+
+    function init() {
+        document.getElementById('currentDate').innerText = new Date().toDateString();
+
+        let html = "";
+        accounts.forEach(acc => {
+            html += `<div class="input-group"><label>${acc}</label><input type="number" class="daily-input" data-name="${acc}" oninput="calcLive()" placeholder="0.00"></div>`;
+        });
+        document.getElementById('inputContainer').innerHTML = html;
+
+        let head = "<th>Date</th>";
+        accounts.forEach(acc => head += `<th>${acc}</th>`);
+        head += "<th>Total</th><th>Comm. Added</th>";
+        document.getElementById('tableHeader').innerHTML = head;
+
+        // Listen for Capital
+        db.ref('settings/capital').on('value', snap => {
+            FIXED_CAP = snap.val() || 0;
+            document.getElementById('displayFixed').innerText = `₹${FIXED_CAP.toLocaleString()}`;
+            calcLive();
+        });
+
+        // Listen for Commission
+        db.ref('settings/total_commission').on('value', snap => {
+            SAVED_COMM = snap.val() || 0;
+            document.getElementById('displayComm').innerText = `₹${SAVED_COMM.toLocaleString()}`;
+            document.getElementById('liveCommHeader').innerText = `₹${SAVED_COMM.toLocaleString()}`;
+        });
+
+        // Listen for History
+        db.ref('history').on('value', snap => renderTable(snap.val()));
+    }
+
+    function calcLive() {
+        let total = 0, dues = 0;
+        document.querySelectorAll('.daily-input').forEach(input => {
+            let val = Number(input.value) || 0;
+            if(input.dataset.name === "Dues") dues = val; else total += val;
+        });
+
+        document.getElementById('liveTotal').innerText = `₹${total.toLocaleString()}`;
+        document.getElementById('liveDues').innerText = `₹${dues.toLocaleString()}`;
+        
+        let diff = total - FIXED_CAP;
+        let diffEl = document.getElementById('liveDiff');
+        diffEl.innerText = (diff >= 0 ? "+" : "") + `₹${diff.toLocaleString()}`;
+        diffEl.style.color = diff >= 0 ? "var(--success)" : "var(--danger)";
+    }
+
+    function saveFixed() {
+        let val = Number(document.getElementById('fixedInput').value);
+        if(val > 0) db.ref('settings/capital').set(val).then(() => {
+            alert("Capital Updated!");
+            document.getElementById('fixedInput').value = "";
+        });
+    }
+
+    function resetComm() {
+        if(confirm("Reset Commission to zero?")) {
+            db.ref('settings/total_commission').set(0);
+        }
+    }
+
+    function resetToday() {
+        if(confirm("Clear current inputs?")) {
+            document.querySelectorAll('.daily-input').forEach(i => i.value = "");
+            document.getElementById('todayCommInput').value = "";
+            calcLive();
+        }
+    }
+
+    function saveToday() {
+        let date = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
+        let tComm = Number(document.getElementById('todayCommInput').value) || 0;
+        let entry = { balances: {}, total: 0, commissionAdded: tComm };
+
+        document.querySelectorAll('.daily-input').forEach(input => {
+            let val = Number(input.value) || 0;
+            entry.balances[input.dataset.name] = val;
+            if(input.dataset.name !== "Dues") entry.total += val;
+        });
+
+        db.ref('history/' + date).set(entry);
+        db.ref('settings/total_commission').set(SAVED_COMM + tComm).then(() => {
+            alert("Saved to Cloud!");
+            document.getElementById('todayCommInput').value = "";
+        });
+    }
+
+    function renderTable(data) {
+        if(!data) return;
+        let html = "";
+        Object.keys(data).reverse().forEach(date => {
+            const row = data[date];
+            html += `<tr><td><b>${date}</b></td>`;
+            accounts.forEach(acc => html += `<td>₹${(row.balances[acc] || 0).toLocaleString()}</td>`);
+            html += `<td><b>₹${row.total.toLocaleString()}</b></td>`;
+            html += `<td style="color:var(--success)">+₹${(row.commissionAdded || 0).toLocaleString()}</td></tr>`;
+        });
+        document.getElementById('tableBody').innerHTML = html;
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>
